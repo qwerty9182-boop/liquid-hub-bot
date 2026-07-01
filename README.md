@@ -46,7 +46,7 @@ BOT_TOKEN=
 BOT_USERNAME=liquid_hub_bot
 WEBAPP_URL=https://liquidhub.timurtafratov.workers.dev/
 CHANNEL_URL=https://t.me/+kxBClTydKr9hNjc5
-MANAGER_URL=https://t.me/defvbg
+MANAGER_URL=https://t.me/liquid_hub_md
 NODE_ENV=development
 LOG_LEVEL=info
 ```
@@ -93,19 +93,22 @@ The bot registers:
 - `/start` — Open main menu
 - `/help` — Help information
 
-## Mini App Button
+## Persistent Reply Keyboard
 
-The main inline button uses Telegram WebApp:
+The `/start` command sends a persistent reply keyboard:
 
 ```text
 🛒 Открыть магазин
+📢 Канал  👨‍💼 Менеджер
 ```
 
-It opens:
+The store button uses Telegram WebApp and opens:
 
 ```text
 https://liquidhub.timurtafratov.workers.dev/
 ```
+
+Telegram reply keyboard buttons do not support ordinary URL buttons. Because of that, `📢 Канал` and `👨‍💼 Менеджер` are text buttons: after pressing them, the bot sends a message with the correct URL button.
 
 ## Deployment to Railway
 
@@ -121,7 +124,7 @@ BOT_TOKEN=
 BOT_USERNAME=liquid_hub_bot
 WEBAPP_URL=https://liquidhub.timurtafratov.workers.dev/
 CHANNEL_URL=https://t.me/+kxBClTydKr9hNjc5
-MANAGER_URL=https://t.me/defvbg
+MANAGER_URL=https://t.me/liquid_hub_md
 NODE_ENV=production
 LOG_LEVEL=info
 ```

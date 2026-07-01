@@ -5,6 +5,12 @@ import { logger } from "./utils/logger.js";
 
 const bot = createBot();
 
+logger.info("CONFIG CHECK", {
+  managerChatId: config.managerChatId,
+  botUsername: config.botUsername,
+  webAppUrl: config.webAppUrl
+});
+
 function setupProcessErrorHandlers(): void {
   process.on("unhandledRejection", (reason) => {
     logger.error("Unhandled promise rejection", reason);

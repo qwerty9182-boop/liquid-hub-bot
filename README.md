@@ -116,6 +116,8 @@ Telegram reply keyboard buttons do not support ordinary URL buttons. Because of 
 
 The Mini App sends order data to the bot through Telegram WebApp `sendData`.
 
+Important: Telegram delivers `web_app_data` to the bot only when the Mini App is opened from the bot's `web_app` keyboard button. If the same site is opened through a direct browser link, a Cloudflare URL, or a regular URL button, `sendData` will not create a `web_app_data` update.
+
 The bot forwards orders to `MANAGER_CHAT_ID` with:
 
 - Telegram ID

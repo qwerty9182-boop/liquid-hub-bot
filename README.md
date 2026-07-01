@@ -47,11 +47,13 @@ BOT_USERNAME=liquid_hub_bot
 WEBAPP_URL=https://liquidhub.timurtafratov.workers.dev/
 CHANNEL_URL=https://t.me/+kxBClTydKr9hNjc5
 MANAGER_URL=https://t.me/liquid_hub_md
+MANAGER_CHAT_ID=
 NODE_ENV=development
 LOG_LEVEL=info
 ```
 
 `BOT_TOKEN` is required. Get it from [@BotFather](https://t.me/BotFather).
+`MANAGER_CHAT_ID` is required for automatic order notifications from the Mini App.
 
 ## Installation
 
@@ -110,6 +112,24 @@ https://liquidhub.timurtafratov.workers.dev/
 
 Telegram reply keyboard buttons do not support ordinary URL buttons. Because of that, `📢 Канал` and `👨‍💼 Менеджер` are text buttons: after pressing them, the bot sends a message with the correct URL button.
 
+## Order Notifications
+
+The Mini App sends order data to the bot through Telegram WebApp `sendData`.
+
+The bot forwards orders to `MANAGER_CHAT_ID` with:
+
+- Telegram ID
+- username
+- first name
+- phone number, if provided
+- product list
+- quantities
+- total price
+- delivery method
+- comment
+
+To get `MANAGER_CHAT_ID`, send a message to the bot from the manager account or add the bot to a private admin group, then read the chat id from logs or a helper bot such as `@userinfobot`.
+
 ## Deployment to Railway
 
 1. Push this project to GitHub.
@@ -125,6 +145,7 @@ BOT_USERNAME=liquid_hub_bot
 WEBAPP_URL=https://liquidhub.timurtafratov.workers.dev/
 CHANNEL_URL=https://t.me/+kxBClTydKr9hNjc5
 MANAGER_URL=https://t.me/liquid_hub_md
+MANAGER_CHAT_ID=
 NODE_ENV=production
 LOG_LEVEL=info
 ```

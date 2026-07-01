@@ -6,6 +6,7 @@ export type AppConfig = {
   webAppUrl: string;
   channelUrl: string;
   managerUrl: string;
+  managerChatId?: string;
   nodeEnv: "development" | "test" | "production";
   logLevel: "debug" | "info" | "warn" | "error";
 };
@@ -57,6 +58,7 @@ export const config: AppConfig = {
   webAppUrl: readUrlEnv("WEBAPP_URL"),
   channelUrl: readUrlEnv("CHANNEL_URL"),
   managerUrl: readUrlEnv("MANAGER_URL"),
+  managerChatId: process.env.MANAGER_CHAT_ID?.trim() || undefined,
   nodeEnv: readEnumEnv("NODE_ENV", "development", allowedNodeEnvs),
   logLevel: readEnumEnv("LOG_LEVEL", "info", allowedLogLevels)
 };

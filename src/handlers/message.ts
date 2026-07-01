@@ -15,6 +15,11 @@ import { logger } from "../utils/logger.js";
 
 export function registerMessageHandlers(bot: Bot<BotContext>): void {
   bot.on("message:web_app_data", async (ctx) => {
+    logger.info("Web app order data received", {
+      userId: ctx.from?.id,
+      payloadLength: ctx.message.web_app_data.data.length
+    });
+
     const order = parseLiquidHubOrder(ctx.message.web_app_data.data);
 
     if (!order) {

@@ -13,49 +13,53 @@ import {
 import type { BotContext } from "../types/context.js";
 import { logger } from "../utils/logger.js";
 
+async function handleWebAppData(ctx: BotContext, rawData: string): Promise<void> {
+  logger.info("Web app order data received", {
+    userId: ctx.from?.id,
+    payloadLength: rawData.length
+  });
+
+  const order = parseLiquidHubOrder(rawData);
+
+  if (!order) {
+    logger.warn("Invalid web app data received", {
+      userId: ctx.from?.id
+    });
+
+    await ctx.reply("Не удалось обработать заказ. Пожалуйста, напишите менеджеру.");
+    return;
+  }
+
+  const managerChatId = getManagerChatId();
+
+  if (!managerChatId) {
+    logger.error("MANAGER_CHAT_ID is not configured");
+    await ctx.reply(
+      "Заказ сформирован, но отправка менеджеру пока не настроена. Напишите менеджеру напрямую."
+    );
+    return;
+  }
+
+  await ctx.api.sendMessage(managerChatId, formatOrderForManager(order), {
+    link_preview_options: {
+      is_disabled: true
+    }
+  });
+
+  logger.info("Order sent to manager", {
+    orderId: order.orderId,
+    userId: ctx.from?.id,
+    total: order.total
+  });
+
+  await ctx.reply(
+    "✅ Заказ отправлен менеджеру. Мы свяжемся с вами в ближайшее время для подтверждения."
+  );
+}
+
 export function registerMessageHandlers(bot: Bot<BotContext>): void {
   bot.on("message:web_app_data", async (ctx) => {
-    logger.info("Web app order data received", {
-      userId: ctx.from?.id,
-      payloadLength: ctx.message.web_app_data.data.length
-    });
-
-    const order = parseLiquidHubOrder(ctx.message.web_app_data.data);
-
-    if (!order) {
-      logger.warn("Invalid web app data received", {
-        userId: ctx.from?.id
-      });
-
-      await ctx.reply("Не удалось обработать заказ. Пожалуйста, напишите менеджеру.");
-      return;
-    }
-
-    const managerChatId = getManagerChatId();
-
-    if (!managerChatId) {
-      logger.error("MANAGER_CHAT_ID is not configured");
-      await ctx.reply(
-        "Заказ сформирован, но отправка менеджеру пока не настроена. Напишите менеджеру напрямую."
-      );
-      return;
-    }
-
-    await ctx.api.sendMessage(managerChatId, formatOrderForManager(order), {
-      link_preview_options: {
-        is_disabled: true
-      }
-    });
-
-    logger.info("Order sent to manager", {
-      orderId: order.orderId,
-      userId: ctx.from?.id,
-      total: order.total
-    });
-
-    await ctx.reply(
-      "✅ Заказ отправлен менеджеру. Мы свяжемся с вами в ближайшее время для подтверждения."
-    );
+    await handleWebAppData(ctx, ctx.message.web_app_data.data);
   });
 
   bot.hears(mainKeyboardButtons.channel, async (ctx) => {
@@ -77,6 +81,15 @@ export function registerMessageHandlers(bot: Bot<BotContext>): void {
   });
 
   bot.on("message", async (ctx) => {
+    if (ctx.message?.web_app_data?.data) {
+      logger.warn("Web app data reached generic message handler fallback", {
+        userId: ctx.from?.id
+      });
+
+      await handleWebAppData(ctx, ctx.message.web_app_data.data);
+      return;
+    }
+
     await ctx.reply("Используй меню ниже для навигации 👇", {
       link_preview_options: {
         is_disabled: true

@@ -42,6 +42,17 @@ function isOrderItem(value: unknown): value is LiquidHubOrder["items"][number] {
   );
 }
 
+function isCompactOrderItem(value: unknown): value is [string, number, number, number] {
+  return (
+    Array.isArray(value) &&
+    value.length === 4 &&
+    typeof value[0] === "string" &&
+    typeof value[1] === "number" &&
+    typeof value[2] === "number" &&
+    typeof value[3] === "number"
+  );
+}
+
 export function parseLiquidHubOrder(rawData: string): LiquidHubOrder | null {
   let value: unknown;
 
@@ -53,6 +64,42 @@ export function parseLiquidHubOrder(rawData: string): LiquidHubOrder | null {
 
   if (!isRecord(value) || value.type !== "liquid_hub_order") {
     return null;
+  }
+
+  if (
+    typeof value.orderId === "string" &&
+    typeof value.total === "number" &&
+    typeof value.delivery === "string" &&
+    Array.isArray(value.items) &&
+    value.items.every(isCompactOrderItem)
+  ) {
+    const telegram = isRecord(value.tg) ? value.tg : {};
+    const phone = value.phone;
+    const comment = value.comment;
+
+    return {
+      type: "liquid_hub_order",
+      orderId: value.orderId,
+      createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString(),
+      customer: {
+        telegram: {
+          id: typeof telegram.id === "number" ? telegram.id : null,
+          username: typeof telegram.u === "string" ? telegram.u : null,
+          firstName: typeof telegram.n === "string" ? telegram.n : null
+        },
+        phone: typeof phone === "string" ? phone : null
+      },
+      items: value.items.map(([name, price, quantity, total], index) => ({
+        id: `item-${index}`,
+        name,
+        price,
+        quantity,
+        total
+      })),
+      total: value.total,
+      delivery: value.delivery,
+      comment: typeof comment === "string" ? comment : null
+    };
   }
 
   if (

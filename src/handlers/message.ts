@@ -82,7 +82,7 @@ export function registerMessageHandlers(bot: Bot<BotContext>): void {
   });
 
   bot.on("message", async (ctx) => {
-    logger.info("Generic message received", ctx.message);
+    logger.info(`Generic message received:\n${JSON.stringify(ctx.message, null, 2)}`);
 
     if (ctx.message?.web_app_data?.data) {
       logger.warn("Web app data reached generic message handler fallback", {

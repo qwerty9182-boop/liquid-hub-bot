@@ -45,6 +45,7 @@ async function main(): Promise<void> {
 
   await registerTelegramCommands(bot);
   await bot.start({
+    allowed_updates: ["message"],
     onStart: (botInfo) => {
       logger.info("Bot is running", {
         id: botInfo.id,

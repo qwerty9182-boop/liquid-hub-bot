@@ -10,7 +10,7 @@ export function createBot(): Bot<BotContext> {
   const bot = new Bot<BotContext>(config.botToken);
 
   bot.use(async (ctx, next) => {
-    logger.info("Incoming update", ctx.update);
+    logger.info(`Incoming update:\n${JSON.stringify(ctx.update, null, 2)}`);
     await next();
   });
 

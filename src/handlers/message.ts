@@ -59,6 +59,7 @@ async function handleWebAppData(ctx: BotContext, rawData: string): Promise<void>
 
 export function registerMessageHandlers(bot: Bot<BotContext>): void {
   bot.on("message:web_app_data", async (ctx) => {
+    logger.info("message:web_app_data fired");
     await handleWebAppData(ctx, ctx.message.web_app_data.data);
   });
 
@@ -81,6 +82,8 @@ export function registerMessageHandlers(bot: Bot<BotContext>): void {
   });
 
   bot.on("message", async (ctx) => {
+    logger.info("Generic message received", ctx.message);
+
     if (ctx.message?.web_app_data?.data) {
       logger.warn("Web app data reached generic message handler fallback", {
         userId: ctx.from?.id

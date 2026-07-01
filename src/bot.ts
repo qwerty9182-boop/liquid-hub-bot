@@ -10,13 +10,7 @@ export function createBot(): Bot<BotContext> {
   const bot = new Bot<BotContext>(config.botToken);
 
   bot.use(async (ctx, next) => {
-    logger.debug("Incoming update", {
-      updateId: ctx.update.update_id,
-      userId: ctx.from?.id,
-      username: ctx.from?.username,
-      chatId: ctx.chat?.id
-    });
-
+    logger.info("Incoming update", ctx.update);
     await next();
   });
 

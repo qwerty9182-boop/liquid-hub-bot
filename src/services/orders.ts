@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import type { TelegramInitDataUser } from "./telegramInitData.js";
 
 export type LiquidHubOrder = {
   type: "liquid_hub_order";
@@ -135,6 +136,23 @@ export function parseLiquidHubOrder(rawData: string): LiquidHubOrder | null {
     total: value.total,
     delivery: value.delivery,
     comment: typeof comment === "string" ? comment : null
+  };
+}
+
+export function withTelegramUser(
+  order: LiquidHubOrder,
+  user: TelegramInitDataUser
+): LiquidHubOrder {
+  return {
+    ...order,
+    customer: {
+      ...order.customer,
+      telegram: {
+        id: user.id,
+        username: user.username,
+        firstName: user.firstName
+      }
+    }
   };
 }
 

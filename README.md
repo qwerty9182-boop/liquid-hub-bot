@@ -1,8 +1,12 @@
 # Liquid Hub Bot
 
-Production-ready Telegram bot for **Liquid Hub**.
+Telegram bot and Railway backend for **Liquid Hub**.
 
-The bot opens the Liquid Hub Telegram Mini App and gives quick access to the store channel and manager.
+The Mini App no longer uses `Telegram.WebApp.sendData()`. Orders are sent through a normal HTTP API:
+
+```text
+Telegram Mini App -> POST /api/order on Railway -> bot.api.sendMessage(MANAGER_CHAT_ID)
+```
 
 ## Stack
 
@@ -11,25 +15,9 @@ The bot opens the Liquid Hub Telegram Mini App and gives quick access to the sto
 - grammY
 - dotenv
 - pnpm
+- Railway-ready HTTP API
 - ESLint
 - Prettier
-- Railway-ready deployment
-
-## Project Structure
-
-```text
-src/
-  index.ts
-  bot.ts
-  config.ts
-  commands/
-  handlers/
-  keyboards/
-  messages/
-  services/
-  types/
-  utils/
-```
 
 ## Environment Variables
 
@@ -39,7 +27,7 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Fill in the variables:
+Fill in:
 
 ```env
 BOT_TOKEN=
@@ -48,12 +36,22 @@ WEBAPP_URL=https://liquidhub.timurtafratov.workers.dev/
 CHANNEL_URL=https://t.me/+kxBClTydKr9hNjc5
 MANAGER_URL=https://t.me/liquid_hub_md
 MANAGER_CHAT_ID=
-NODE_ENV=development
+PORT=3000
+ALLOWED_ORIGINS=https://liquidhub.timurtafratov.workers.dev
+TELEGRAM_INIT_DATA_MAX_AGE_SECONDS=86400
+NODE_ENV=production
 LOG_LEVEL=info
 ```
 
-`BOT_TOKEN` is required. Get it from [@BotFather](https://t.me/BotFather).
-`MANAGER_CHAT_ID` is required for automatic order notifications from the Mini App.
+`BOT_TOKEN` comes from [@BotFather](https://t.me/BotFather).
+
+`MANAGER_CHAT_ID` is the Telegram chat id where orders will be sent.
+
+`ALLOWED_ORIGINS` should contain the Mini App site origin. For a custom domain, add it too:
+
+```env
+ALLOWED_ORIGINS=https://liquidhub.timurtafratov.workers.dev,https://liquidhub.md
+```
 
 ## Installation
 
@@ -67,12 +65,91 @@ pnpm install
 pnpm dev
 ```
 
+The API will run on:
+
+```text
+http://localhost:3000/api/order
+```
+
 ## Production
 
 ```bash
 pnpm build
 pnpm start
 ```
+
+## API
+
+### Health
+
+```http
+GET /health
+```
+
+### Create Order
+
+```http
+POST /api/order
+Content-Type: application/json
+```
+
+Body:
+
+```json
+{
+  "initData": "Telegram.WebApp.initData",
+  "order": {
+    "type": "liquid_hub_order",
+    "orderId": "LH-123",
+    "items": [],
+    "total": 200,
+    "delivery": "Доставка",
+    "phone": "+373...",
+    "comment": "..."
+  }
+}
+```
+
+The backend verifies Telegram `initData`, extracts the Telegram user, formats the order, sends it to `MANAGER_CHAT_ID`, and returns:
+
+```json
+{ "success": true }
+```
+
+## Deployment to Railway
+
+1. Push `liquid-hub-bot` to GitHub.
+2. Create a new Railway project.
+3. Deploy from the GitHub repository.
+4. Add all environment variables from `.env.example`.
+5. Make sure `NODE_ENV=production`.
+6. Railway will provide a public domain, for example:
+
+```text
+https://liquid-hub-bot-production.up.railway.app
+```
+
+7. Open:
+
+```text
+https://YOUR-RAILWAY-DOMAIN/health
+```
+
+You should see:
+
+```json
+{ "success": true, "status": "ok" }
+```
+
+8. In the Mini App static site, edit `outputs/liquid-hub/config.js`:
+
+```js
+window.LIQUID_HUB_CONFIG = {
+  orderApiUrl: "https://YOUR-RAILWAY-DOMAIN/api/order"
+};
+```
+
+9. Redeploy the Mini App files to Cloudflare Pages.
 
 ## Code Quality
 
@@ -82,128 +159,15 @@ pnpm lint
 pnpm format:check
 ```
 
-To format files:
+To format:
 
 ```bash
 pnpm format
 ```
 
-## Telegram Commands
-
-The bot registers:
-
-- `/start` — Open main menu
-- `/help` — Help information
-
-## Persistent Reply Keyboard
-
-The `/start` command sends a persistent reply keyboard:
-
-```text
-🛒 Открыть магазин
-📢 Канал  👨‍💼 Менеджер
-```
-
-The store button uses Telegram WebApp and opens:
-
-```text
-https://liquidhub.timurtafratov.workers.dev/
-```
-
-Telegram reply keyboard buttons do not support ordinary URL buttons. Because of that, `📢 Канал` and `👨‍💼 Менеджер` are text buttons: after pressing them, the bot sends a message with the correct URL button.
-
-## Order Notifications
-
-The Mini App sends order data to the bot through Telegram WebApp `sendData`.
-
-Important: Telegram delivers `web_app_data` to the bot only when the Mini App is opened from the bot's `web_app` keyboard button. If the same site is opened through a direct browser link, a Cloudflare URL, or a regular URL button, `sendData` will not create a `web_app_data` update.
-
-The bot forwards orders to `MANAGER_CHAT_ID` with:
-
-- Telegram ID
-- username
-- first name
-- phone number, if provided
-- product list
-- quantities
-- total price
-- delivery method
-- comment
-
-To get `MANAGER_CHAT_ID`, send a message to the bot from the manager account or add the bot to a private admin group, then read the chat id from logs or a helper bot such as `@userinfobot`.
-
-## Deployment to Railway
-
-1. Push this project to GitHub.
-2. Open [Railway](https://railway.app/).
-3. Create a new project.
-4. Choose **Deploy from GitHub repo**.
-5. Select the repository.
-6. Add environment variables in Railway:
-
-```env
-BOT_TOKEN=
-BOT_USERNAME=liquid_hub_bot
-WEBAPP_URL=https://liquidhub.timurtafratov.workers.dev/
-CHANNEL_URL=https://t.me/+kxBClTydKr9hNjc5
-MANAGER_URL=https://t.me/liquid_hub_md
-MANAGER_CHAT_ID=
-NODE_ENV=production
-LOG_LEVEL=info
-```
-
-7. Railway will build the project with Nixpacks.
-8. Start command:
-
-```bash
-pnpm start
-```
-
-The included `railway.json` already defines the production start command.
-
-## Deployment to GitHub
-
-Create a repository and push:
-
-```bash
-git init
-git add .
-git commit -m "Initial Liquid Hub bot"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/liquid-hub-bot.git
-git push -u origin main
-```
-
-GitHub Actions will run:
-
-- typecheck
-- lint
-- formatting check
-- build
-
-## Future Expansion
-
-The architecture is prepared for:
-
-- promo codes
-- mailing
-- statistics
-- admin panel
-- order notifications
-- database integration
-
-Recommended next folders when features grow:
-
-```text
-src/modules/
-src/repositories/
-src/database/
-src/admin/
-src/jobs/
-```
-
 ## Notes
 
 - Do not commit `.env`.
-- Keep secrets in Railway environment variables.
-- Use HTTPS URLs for Telegram Mini Apps.
+- Keep secrets in Railway variables.
+- The Mini App must be opened through the Telegram bot button so Telegram provides signed `initData`.
+- Orders do not depend on `web_app_data`.

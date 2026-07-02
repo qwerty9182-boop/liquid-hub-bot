@@ -35,6 +35,10 @@ export function createMainReplyKeyboard(): ReplyKeyboardMarkup {
   };
 }
 
+export function createStoreInlineKeyboard(): InlineKeyboard {
+  return new InlineKeyboard().webApp("🛒 Открыть магазин", config.webAppUrl);
+}
+
 export function createChannelKeyboard(): InlineKeyboard {
   return new InlineKeyboard().url("📢 Открыть канал", config.channelUrl);
 }

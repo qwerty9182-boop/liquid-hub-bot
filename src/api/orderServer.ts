@@ -12,6 +12,7 @@ const MAX_BODY_BYTES = 64 * 1024;
 
 type OrderRequestBody = {
   initData?: unknown;
+  telegramInitData?: unknown;
   order?: unknown;
 };
 
@@ -73,6 +74,18 @@ function isOrderRequestBody(value: unknown): value is OrderRequestBody {
   return typeof value === "object" && value !== null;
 }
 
+function readTelegramInitData(body: OrderRequestBody): string | null {
+  if (typeof body.initData === "string") {
+    return body.initData;
+  }
+
+  if (typeof body.telegramInitData === "string") {
+    return body.telegramInitData;
+  }
+
+  return null;
+}
+
 async function handleOrderRequest(bot: Bot<BotContext>, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
 
@@ -100,7 +113,27 @@ async function handleOrderRequest(bot: Bot<BotContext>, req: IncomingMessage, re
     return;
   }
 
-  if (!isOrderRequestBody(body) || typeof body.initData !== "string") {
+  if (!isOrderRequestBody(body)) {
+    sendJson(res, 400, {
+      success: false,
+      error: "missing_init_data"
+    });
+    return;
+  }
+
+  const initData = readTelegramInitData(body);
+
+  logger.info("Order API request body received", {
+    origin,
+    body,
+    fields: Object.keys(body),
+    initDataField: typeof body.initData,
+    telegramInitDataField: typeof body.telegramInitData,
+    initDataLength: initData?.length ?? 0,
+    hasOrder: typeof body.order === "object" && body.order !== null
+  });
+
+  if (!initData) {
     sendJson(res, 400, {
       success: false,
       error: "missing_init_data"
@@ -109,7 +142,7 @@ async function handleOrderRequest(bot: Bot<BotContext>, req: IncomingMessage, re
   }
 
   const verification = verifyTelegramInitData(
-    body.initData,
+    initData,
     config.botToken,
     config.telegramInitDataMaxAgeSeconds
   );

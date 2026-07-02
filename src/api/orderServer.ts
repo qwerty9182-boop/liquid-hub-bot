@@ -3,7 +3,12 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { Bot } from "grammy";
 
 import { config } from "../config.js";
-import { formatOrderForManager, getManagerChatId, parseLiquidHubOrder, withTelegramUser } from "../services/orders.js";
+import {
+  formatOrderForManager,
+  getManagerChatId,
+  parseLiquidHubOrder,
+  withTelegramUser
+} from "../services/orders.js";
 import { verifyTelegramInitData } from "../services/telegramInitData.js";
 import type { BotContext } from "../types/context.js";
 import { logger } from "../utils/logger.js";
@@ -17,7 +22,9 @@ type OrderRequestBody = {
 };
 
 function isAllowedOrigin(origin: string | undefined): boolean {
-  return config.allowedOrigins.includes("*") || (origin ? config.allowedOrigins.includes(origin) : true);
+  return (
+    config.allowedOrigins.includes("*") || (origin ? config.allowedOrigins.includes(origin) : true)
+  );
 }
 
 function applyCorsHeaders(req: IncomingMessage, res: ServerResponse): void {
@@ -86,7 +93,11 @@ function readTelegramInitData(body: OrderRequestBody): string | null {
   return null;
 }
 
-async function handleOrderRequest(bot: Bot<BotContext>, req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleOrderRequest(
+  bot: Bot<BotContext>,
+  req: IncomingMessage,
+  res: ServerResponse
+): Promise<void> {
   const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
 
   if (!isAllowedOrigin(origin)) {
@@ -123,17 +134,8 @@ async function handleOrderRequest(bot: Bot<BotContext>, req: IncomingMessage, re
 
   const initData = readTelegramInitData(body);
 
-  logger.info("Order API request body received", {
-    origin,
-    body,
-    fields: Object.keys(body),
-    initDataField: typeof body.initData,
-    telegramInitDataField: typeof body.telegramInitData,
-    initDataLength: initData?.length ?? 0,
-    hasOrder: typeof body.order === "object" && body.order !== null
-  });
-
   if (!initData) {
+    logger.warn("Rejected order request without Telegram initData", { origin });
     sendJson(res, 400, {
       success: false,
       error: "missing_init_data"

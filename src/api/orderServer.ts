@@ -4,11 +4,12 @@ import type { Bot } from "grammy";
 
 import { config } from "../config.js";
 import {
+  buildOrderFromProducts,
   formatOrderForManager,
   getManagerChatId,
-  parseLiquidHubOrder,
-  withTelegramUser
+  parseLiquidHubOrder
 } from "../services/orders.js";
+import { getActiveProductsByIds, getPublicProducts } from "../services/products.js";
 import { verifyTelegramInitData } from "../services/telegramInitData.js";
 import type { BotContext } from "../types/context.js";
 import { logger } from "../utils/logger.js";
@@ -35,9 +36,39 @@ function applyCorsHeaders(req: IncomingMessage, res: ServerResponse): void {
       : "*";
 
   res.setHeader("Access-Control-Allow-Origin", resolvedOrigin);
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Vary", "Origin");
+}
+
+async function handleProductsRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const origin = typeof req.headers.origin === "string" ? req.headers.origin : undefined;
+
+  if (!isAllowedOrigin(origin)) {
+    logger.warn("Rejected products request from disallowed origin", { origin });
+    sendJson(res, 403, {
+      success: false,
+      error: "origin_not_allowed"
+    });
+    return;
+  }
+
+  try {
+    const products = await getPublicProducts();
+    res.setHeader("Cache-Control", "public, max-age=30");
+    sendJson(res, 200, {
+      success: true,
+      products
+    });
+  } catch (error) {
+    logger.error("Failed to load products", {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    sendJson(res, 502, {
+      success: false,
+      error: "products_unavailable"
+    });
+  }
 }
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown): void {
@@ -185,7 +216,40 @@ async function handleOrderRequest(
     return;
   }
 
-  const verifiedOrder = withTelegramUser(order, verification.user);
+  let productsById: Awaited<ReturnType<typeof getActiveProductsByIds>>;
+
+  try {
+    productsById = await getActiveProductsByIds(order.items.map((item) => item.productId));
+  } catch (error) {
+    logger.error("Failed to validate order products", {
+      orderId: order.orderId,
+      telegramId: verification.user.id,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    sendJson(res, 502, {
+      success: false,
+      error: "products_unavailable",
+      message: "Не удалось проверить наличие товаров. Попробуйте еще раз."
+    });
+    return;
+  }
+
+  const orderResult = buildOrderFromProducts(order, verification.user, productsById);
+
+  if (!orderResult.ok) {
+    logger.warn("Rejected order with unavailable product data", {
+      error: orderResult.error,
+      telegramId: verification.user.id
+    });
+    sendJson(res, orderResult.statusCode, {
+      success: false,
+      error: orderResult.error,
+      message: orderResult.message
+    });
+    return;
+  }
+
+  const verifiedOrder = orderResult.order;
 
   try {
     await bot.api.sendMessage(managerChatId, formatOrderForManager(verifiedOrder), {
@@ -233,6 +297,11 @@ export function createOrderServer(bot: Bot<BotContext>): Server {
         success: true,
         status: "ok"
       });
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/api/products") {
+      void handleProductsRequest(req, res);
       return;
     }
 

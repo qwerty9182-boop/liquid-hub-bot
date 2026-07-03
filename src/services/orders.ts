@@ -1,5 +1,22 @@
 import { config } from "../config.js";
+import type { Product } from "./products.js";
 import type { TelegramInitDataUser } from "./telegramInitData.js";
+
+const MAX_ITEMS_PER_ORDER = 50;
+const MAX_QUANTITY_PER_ITEM = 20;
+
+export type LiquidHubOrderRequest = {
+  type: "liquid_hub_order";
+  orderId: string;
+  createdAt: string;
+  phone: string | null;
+  delivery: string;
+  comment: string | null;
+  items: {
+    productId: number;
+    quantity: number;
+  }[];
+};
 
 export type LiquidHubOrder = {
   type: "liquid_hub_order";
@@ -7,14 +24,14 @@ export type LiquidHubOrder = {
   createdAt: string;
   customer: {
     telegram: {
-      id: number | null;
+      id: number;
       username: string | null;
       firstName: string | null;
     };
     phone: string | null;
   };
   items: {
-    id: string;
+    productId: number;
     name: string;
     price: number;
     quantity: number;
@@ -25,36 +42,47 @@ export type LiquidHubOrder = {
   comment: string | null;
 };
 
+export type OrderBuildResult =
+  | {
+      ok: true;
+      order: LiquidHubOrder;
+    }
+  | {
+      ok: false;
+      statusCode: number;
+      error: string;
+      message: string;
+    };
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function isOrderItem(value: unknown): value is LiquidHubOrder["items"][number] {
-  if (!isRecord(value)) {
-    return false;
+function normalizeNullableText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function parseProductId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
   }
 
-  return (
-    typeof value.id === "string" &&
-    typeof value.name === "string" &&
-    typeof value.price === "number" &&
-    typeof value.quantity === "number" &&
-    typeof value.total === "number"
-  );
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    return Number.parseInt(value, 10);
+  }
+
+  return null;
 }
 
-function isCompactOrderItem(value: unknown): value is [string, number, number, number] {
-  return (
-    Array.isArray(value) &&
-    value.length === 4 &&
-    typeof value[0] === "string" &&
-    typeof value[1] === "number" &&
-    typeof value[2] === "number" &&
-    typeof value[3] === "number"
-  );
+function parseQuantity(value: unknown): number | null {
+  if (!Number.isInteger(value) || typeof value !== "number" || value <= 0) {
+    return null;
+  }
+
+  return value;
 }
 
-export function parseLiquidHubOrder(rawData: string): LiquidHubOrder | null {
+export function parseLiquidHubOrder(rawData: string): LiquidHubOrderRequest | null {
   let value: unknown;
 
   try {
@@ -63,95 +91,124 @@ export function parseLiquidHubOrder(rawData: string): LiquidHubOrder | null {
     return null;
   }
 
-  if (!isRecord(value) || value.type !== "liquid_hub_order") {
-    return null;
-  }
-
   if (
-    typeof value.orderId === "string" &&
-    typeof value.total === "number" &&
-    typeof value.delivery === "string" &&
-    Array.isArray(value.items) &&
-    value.items.every(isCompactOrderItem)
-  ) {
-    const telegram = isRecord(value.tg) ? value.tg : {};
-    const phone = value.phone;
-    const comment = value.comment;
-
-    return {
-      type: "liquid_hub_order",
-      orderId: value.orderId,
-      createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString(),
-      customer: {
-        telegram: {
-          id: typeof telegram.id === "number" ? telegram.id : null,
-          username: typeof telegram.u === "string" ? telegram.u : null,
-          firstName: typeof telegram.n === "string" ? telegram.n : null
-        },
-        phone: typeof phone === "string" ? phone : null
-      },
-      items: value.items.map(([name, price, quantity, total], index) => ({
-        id: `item-${index}`,
-        name,
-        price,
-        quantity,
-        total
-      })),
-      total: value.total,
-      delivery: value.delivery,
-      comment: typeof comment === "string" ? comment : null
-    };
-  }
-
-  if (
+    !isRecord(value) ||
+    value.type !== "liquid_hub_order" ||
     typeof value.orderId !== "string" ||
-    typeof value.createdAt !== "string" ||
-    typeof value.total !== "number" ||
     typeof value.delivery !== "string" ||
     !Array.isArray(value.items) ||
-    !value.items.every(isOrderItem) ||
-    !isRecord(value.customer) ||
-    !isRecord(value.customer.telegram)
+    !value.items.length ||
+    value.items.length > MAX_ITEMS_PER_ORDER
   ) {
     return null;
   }
 
-  const telegram = value.customer.telegram;
-  const phone = value.customer.phone;
-  const comment = value.comment;
+  const items: LiquidHubOrderRequest["items"] = [];
+
+  for (const item of value.items) {
+    if (!isRecord(item)) {
+      return null;
+    }
+
+    const productId = parseProductId(item.productId);
+    const quantity = parseQuantity(item.quantity);
+
+    if (!productId || !quantity || quantity > MAX_QUANTITY_PER_ITEM) {
+      return null;
+    }
+
+    items.push({
+      productId,
+      quantity
+    });
+  }
 
   return {
     type: "liquid_hub_order",
     orderId: value.orderId,
-    createdAt: value.createdAt,
-    customer: {
-      telegram: {
-        id: typeof telegram.id === "number" ? telegram.id : null,
-        username: typeof telegram.username === "string" ? telegram.username : null,
-        firstName: typeof telegram.firstName === "string" ? telegram.firstName : null
-      },
-      phone: typeof phone === "string" ? phone : null
-    },
-    items: value.items,
-    total: value.total,
+    createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString(),
+    phone: normalizeNullableText(value.phone),
     delivery: value.delivery,
-    comment: typeof comment === "string" ? comment : null
+    comment: normalizeNullableText(value.comment),
+    items
   };
 }
 
-export function withTelegramUser(
-  order: LiquidHubOrder,
-  user: TelegramInitDataUser
-): LiquidHubOrder {
+export function buildOrderFromProducts(
+  request: LiquidHubOrderRequest,
+  user: TelegramInitDataUser,
+  productsById: Map<number, Product>
+): OrderBuildResult {
+  const quantitiesByProductId = new Map<number, number>();
+
+  for (const item of request.items) {
+    quantitiesByProductId.set(
+      item.productId,
+      (quantitiesByProductId.get(item.productId) ?? 0) + item.quantity
+    );
+  }
+
+  const lines: LiquidHubOrder["items"] = [];
+
+  for (const [productId, quantity] of quantitiesByProductId.entries()) {
+    const product = productsById.get(productId);
+
+    if (!product?.inStock) {
+      return {
+        ok: false,
+        statusCode: 409,
+        error: "product_unavailable",
+        message: `Товар #${productId} сейчас недоступен. Обновите каталог и попробуйте снова.`
+      };
+    }
+
+    if (quantity > MAX_QUANTITY_PER_ITEM) {
+      return {
+        ok: false,
+        statusCode: 400,
+        error: "quantity_limit_exceeded",
+        message: `Максимум ${MAX_QUANTITY_PER_ITEM} шт. одного товара в заказе.`
+      };
+    }
+
+    if (product.stockQuantity !== null && quantity > product.stockQuantity) {
+      return {
+        ok: false,
+        statusCode: 409,
+        error: "not_enough_stock",
+        message: `Недостаточно товара "${product.name}" в наличии.`
+      };
+    }
+
+    lines.push({
+      productId,
+      name: product.name,
+      price: product.price,
+      quantity,
+      total: product.price * quantity
+    });
+  }
+
+  const total = lines.reduce((sum, item) => sum + item.total, 0);
+
   return {
-    ...order,
-    customer: {
-      ...order.customer,
-      telegram: {
-        id: user.id,
-        username: user.username,
-        firstName: user.firstName
-      }
+    ok: true,
+    order: {
+      type: "liquid_hub_order",
+      orderId: request.orderId,
+      createdAt: request.createdAt,
+      customer: {
+        telegram: {
+          id: user.id,
+          username: user.username,
+          firstName: user.firstName
+        },
+        phone: request.phone
+      },
+      items: lines,
+      total,
+      delivery: request.delivery,
+      comment: request.comment
     }
   };
 }
@@ -163,7 +220,7 @@ function formatPrice(value: number): string {
 export function formatOrderForManager(order: LiquidHubOrder): string {
   const items = order.items
     .map((item, index) => {
-      return `${index + 1}. ${item.name}\n   Кол-во: ${item.quantity}\n   Цена: ${formatPrice(item.price)}\n   Сумма: ${formatPrice(item.total)}`;
+      return `${index + 1}. ${item.name}\n   ID: ${item.productId}\n   Кол-во: ${item.quantity}\n   Цена: ${formatPrice(item.price)}\n   Сумма: ${formatPrice(item.total)}`;
     })
     .join("\n\n");
 
@@ -174,9 +231,7 @@ export function formatOrderForManager(order: LiquidHubOrder): string {
     `Дата: ${new Date(order.createdAt).toLocaleString("ru-RU", { timeZone: "Europe/Chisinau" })}`,
     "",
     "👤 Клиент",
-    order.customer.telegram.id
-      ? `Telegram ID: ${order.customer.telegram.id}`
-      : "Telegram ID: не получен",
+    `Telegram ID: ${order.customer.telegram.id}`,
     order.customer.telegram.username
       ? `Username: @${order.customer.telegram.username}`
       : "Username: не указан",

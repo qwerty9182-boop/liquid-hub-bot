@@ -2,11 +2,21 @@
 
 Telegram bot and Railway backend for **Liquid Hub**.
 
-The Mini App no longer uses `Telegram.WebApp.sendData()`. Orders are sent through a normal HTTP API:
+## Architecture
+
+Orders:
 
 ```text
 Telegram Mini App -> POST /api/order on Railway -> bot.api.sendMessage(MANAGER_CHAT_ID)
 ```
+
+Catalog:
+
+```text
+Telegram Mini App -> GET /api/products on Railway -> Supabase products table
+```
+
+The Mini App does not use `Telegram.WebApp.sendData()`.
 
 ## Stack
 
@@ -15,19 +25,14 @@ Telegram Mini App -> POST /api/order on Railway -> bot.api.sendMessage(MANAGER_C
 - grammY
 - dotenv
 - pnpm
-- Railway-ready HTTP API
+- Railway HTTP API
+- Supabase REST API
 - ESLint
 - Prettier
 
 ## Environment Variables
 
-Copy `.env.example` to `.env`:
-
-```bash
-cp .env.example .env
-```
-
-Fill in:
+Copy `.env.example` to `.env` and fill in:
 
 ```env
 BOT_TOKEN=
@@ -36,6 +41,8 @@ WEBAPP_URL=https://liquidhub.timurtafratov.workers.dev/
 CHANNEL_URL=https://t.me/+kxBClTydKr9hNjc5
 MANAGER_URL=https://t.me/liquid_hub_md
 MANAGER_CHAT_ID=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
 PORT=3000
 ALLOWED_ORIGINS=https://liquidhub.timurtafratov.workers.dev
 TELEGRAM_INIT_DATA_MAX_AGE_SECONDS=86400
@@ -43,15 +50,10 @@ NODE_ENV=production
 LOG_LEVEL=info
 ```
 
-`BOT_TOKEN` comes from [@BotFather](https://t.me/BotFather).
+Important:
 
-`MANAGER_CHAT_ID` is the Telegram chat id where orders will be sent.
-
-`ALLOWED_ORIGINS` should contain the Mini App site origin. For a custom domain, add it too:
-
-```env
-ALLOWED_ORIGINS=https://liquidhub.timurtafratov.workers.dev,https://liquidhub.md
-```
+- `SUPABASE_SERVICE_ROLE_KEY` must exist only in Railway variables.
+- Never put `SUPABASE_SERVICE_ROLE_KEY` into Cloudflare, frontend files, GitHub, or `config.js`.
 
 ## Installation
 
@@ -63,12 +65,6 @@ pnpm install
 
 ```bash
 pnpm dev
-```
-
-The API will run on:
-
-```text
-http://localhost:3000/api/order
 ```
 
 ## Production
@@ -86,6 +82,23 @@ pnpm start
 GET /health
 ```
 
+### Products
+
+```http
+GET /api/products
+```
+
+Returns only products where `in_stock = true`, sorted by `sort_order`, then `name`.
+
+Response:
+
+```json
+{
+  "success": true,
+  "products": []
+}
+```
+
 ### Create Order
 
 ```http
@@ -101,8 +114,12 @@ Body:
   "order": {
     "type": "liquid_hub_order",
     "orderId": "LH-123",
-    "items": [],
-    "total": 200,
+    "items": [
+      {
+        "productId": 1,
+        "quantity": 2
+      }
+    ],
     "delivery": "Доставка",
     "phone": "+373...",
     "comment": "..."
@@ -110,46 +127,55 @@ Body:
 }
 ```
 
-The backend verifies Telegram `initData`, extracts the Telegram user, formats the order, sends it to `MANAGER_CHAT_ID`, and returns:
+The backend verifies Telegram `initData`, loads product names and prices from Supabase, recalculates the total, validates stock, and sends the final order to `MANAGER_CHAT_ID`.
 
-```json
-{ "success": true }
-```
+## Supabase
 
-## Deployment to Railway
+See [SETUP_SUPABASE.md](./SETUP_SUPABASE.md).
 
-1. Push `liquid-hub-bot` to GitHub.
-2. Create a new Railway project.
-3. Deploy from the GitHub repository.
-4. Add all environment variables from `.env.example`.
-5. Make sure `NODE_ENV=production`.
-6. Railway will provide a public domain, for example:
+SQL files:
 
 ```text
-https://liquid-hub-bot-production.up.railway.app
+supabase/migrations/001_create_products.sql
+supabase/seed.sql
 ```
 
-7. Open:
+## Mini App Config
+
+Cloudflare static files use:
+
+```js
+window.LIQUID_HUB_CONFIG = {
+  orderApiUrl: "https://YOUR-RAILWAY-DOMAIN/api/order",
+  productsApiUrl: "https://YOUR-RAILWAY-DOMAIN/api/products"
+};
+```
+
+No secrets are stored in frontend config.
+
+## Railway Deployment
+
+1. Push this project to GitHub.
+2. Open Railway.
+3. Deploy from the GitHub repository.
+4. Add all variables from `.env.example`.
+5. Open:
 
 ```text
 https://YOUR-RAILWAY-DOMAIN/health
 ```
 
-You should see:
+Expected:
 
 ```json
 { "success": true, "status": "ok" }
 ```
 
-8. In the Mini App static site, edit `outputs/liquid-hub/config.js`:
+Then test:
 
-```js
-window.LIQUID_HUB_CONFIG = {
-  orderApiUrl: "https://YOUR-RAILWAY-DOMAIN/api/order"
-};
+```text
+https://YOUR-RAILWAY-DOMAIN/api/products
 ```
-
-9. Redeploy the Mini App files to Cloudflare Pages.
 
 ## Code Quality
 
@@ -164,10 +190,3 @@ To format:
 ```bash
 pnpm format
 ```
-
-## Notes
-
-- Do not commit `.env`.
-- Keep secrets in Railway variables.
-- The Mini App must be opened through the Telegram bot button so Telegram provides signed `initData`.
-- Orders do not depend on `web_app_data`.

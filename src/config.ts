@@ -7,6 +7,8 @@ export type AppConfig = {
   channelUrl: string;
   managerUrl: string;
   managerChatId?: string;
+  supabaseUrl: string;
+  supabaseServiceRoleKey: string;
   port: number;
   allowedOrigins: string[];
   telegramInitDataMaxAgeSeconds: number;
@@ -91,6 +93,8 @@ export const config: AppConfig = {
   channelUrl: readUrlEnv("CHANNEL_URL"),
   managerUrl: readUrlEnv("MANAGER_URL"),
   managerChatId: process.env.MANAGER_CHAT_ID?.trim() || undefined,
+  supabaseUrl: readUrlEnv("SUPABASE_URL").replace(/\/$/, ""),
+  supabaseServiceRoleKey: readRequiredEnv("SUPABASE_SERVICE_ROLE_KEY"),
   port: readIntegerEnv("PORT", 3000),
   allowedOrigins: readCsvEnv("ALLOWED_ORIGINS", ["*"]),
   telegramInitDataMaxAgeSeconds: readIntegerEnv("TELEGRAM_INIT_DATA_MAX_AGE_SECONDS", 86_400),
